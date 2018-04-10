@@ -24,12 +24,12 @@ We're going to push a big data frame into SQL Server using three methods. The da
 library(dbloadss)
 
 random_data_set(n_rows = 5, n_cols = 5)
-#>       COL_1    COL_2     COL_3    COL_4    COL_5
-#> 1 7.9700882 2.534203 3.8468740 4.846999 3.554365
-#> 2 4.0936430 7.565552 3.1657256 2.141528 3.208285
-#> 3 0.9447392 4.957917 5.3309777 1.798137 6.678179
-#> 4 2.0889679 8.918446 0.8271645 9.950788 4.035818
-#> 5 6.7827475 4.993807 0.6388639 5.940411 8.803349
+#>      COL_1    COL_2     COL_3    COL_4    COL_5
+#> 1 7.337917 3.873387 0.4994443 2.026814 9.443235
+#> 2 2.281623 4.896035 6.9717638 8.305794 7.919791
+#> 3 3.512538 1.542272 5.2494306 3.978269 3.453247
+#> 4 5.815818 2.686854 7.6096585 2.029168 8.976130
+#> 5 3.637890 6.507928 2.3285816 8.489208 5.399292
 ```
 
 R is pretty quick at this sort of thing so we don't really need to worry about how long it takes to make a big data frame.
@@ -40,7 +40,7 @@ system.time({
   random_data <- random_data_set(n_rows = n_rows, n_cols = 5)
 })
 #>    user  system elapsed 
-#>    0.78    0.02    0.81
+#>    0.75    0.01    0.81
 ```
 
 but what we're interested in is how fast to push this to SQL Server?.
@@ -73,7 +73,7 @@ odbcClose(db)
 
 time30k
 #>    user  system elapsed 
-#>    2.25    0.88  146.19
+#>    1.95    0.62  142.98
 ```
 
 Over 2 minutes! It's been roughly linear for me so that total write time for 3m rows is a few hours.
@@ -101,13 +101,51 @@ dbDisconnect(dbi)
 
 time3modbc
 #>    user  system elapsed 
-#>   10.40    0.56   64.09
+#>   10.28    0.62   63.80
 ```
 
 SQL Server External Script
 --------------------------
 
-An alternative approach is to use the new features in SQL Server 17 (and 16) for calling out to R scripts from SQL. This is done via the `sp_execute_external_script` command, which we will wrap in a stored procedure.
+An alternative approach is to use the new features in SQL Server 17 (and 16) for calling out to R scripts from SQL. This is done via the `sp_execute_external_script` command, which we will wrap in a stored procedure. This is what that looks like for me:
+
+``` sql
+use [ml];
+
+DROP PROC IF EXISTS generate_random_data;
+GO
+CREATE PROC generate_random_data(@nrow int)
+AS
+BEGIN
+ EXEC sp_execute_external_script
+       @language = N'R'  
+     , @script = N'  
+          library(dbloadss)
+          random_data <- random_data_set(n_rows = nrow_r, n_cols = 5)
+' 
+   , @output_data_1_name = N'random_data'
+     , @params = N'@nrow_r int'
+     , @nrow_r = @nrow
+    WITH RESULT SETS ((
+          "COL_1" float not null,   
+        "COL_2" float not null,  
+        "COL_3" float not null,   
+        "COL_4" float not null,
+            "COL_5" float not null)); 
+END;
+GO
+```
+
+We then call the stored procedure with another query (skipping out a step that clears it inbetween tests).
+
+``` sql
+INSERT INTO randData
+EXEC [dbo].[generate_random_data] @nrow = 3000000
+```
+
+![SQL Server Timer](SStime.jpg)
+
+and this runs in 34 seconds. My best guess for the performance increase is that the data is serialised more efficiently. More to investigate.
 
 License
 =======

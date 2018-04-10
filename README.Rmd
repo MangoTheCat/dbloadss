@@ -103,7 +103,47 @@ time3modbc
 
 ## SQL Server External Script
 
-An alternative approach is to use the new features in SQL Server 17 (and 16) for calling out to R scripts from SQL. This is done via the `sp_execute_external_script` command, which we will wrap in a stored procedure.
+An alternative approach is to use the new features in SQL Server 17 (and 16) for calling out to R scripts from SQL. This is done via the `sp_execute_external_script` command, which we will wrap in a stored procedure. This is what that looks like for me:
+
+```sql
+use [ml];
+
+DROP PROC IF EXISTS generate_random_data;
+GO
+CREATE PROC generate_random_data(@nrow int)
+AS
+BEGIN
+ EXEC sp_execute_external_script
+       @language = N'R'  
+     , @script = N'  
+          library(dbloadss)
+          random_data <- random_data_set(n_rows = nrow_r, n_cols = 5)
+' 
+   , @output_data_1_name = N'random_data'
+	 , @params = N'@nrow_r int'
+	 , @nrow_r = @nrow
+    WITH RESULT SETS ((
+	      "COL_1" float not null,   
+        "COL_2" float not null,  
+        "COL_3" float not null,   
+        "COL_4" float not null,
+		    "COL_5" float not null)); 
+END;
+GO
+```
+
+We then call the stored procedure with another query (skipping out a step that clears it inbetween tests).
+
+```sql
+INSERT INTO randData
+EXEC [dbo].[generate_random_data] @nrow = 3000000
+
+```
+
+![SQL Server Timer](SStime.jpg)
+
+and this runs in 34 seconds. My best guess for the performance increase is that the data is serialised more efficiently. More to investigate.
+
 
 # License 
 
