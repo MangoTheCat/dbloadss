@@ -1,6 +1,6 @@
 Package: dbloadss
 Title: Load simulated datasets in SQL Server
-Version: 0.0.0.9000
+Version: 0.0.1
 Authors@R: person("Doug", "Ashton", email = "dashton@mango-solutions.com", role = c("aut", "cre"))
 Description: Testing SQL Server integration and speeds.
 Depends: R (>= 3.3.0)
