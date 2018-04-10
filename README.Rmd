@@ -38,13 +38,68 @@ library(dbloadss)
 random_data_set(n_rows = 5, n_cols = 5)
 ```
 
+R is pretty quick at this sort of thing so we don't really need to worry about how long it takes to make a big data frame.
+
+```{r time_create}
+n_rows <- 3000000
+system.time({
+  random_data <- random_data_set(n_rows = n_rows, n_cols = 5)
+})
+```
+
+but what we're interested in is how fast to push this to SQL Server?.
+
 ## RODBC
 
-`RODBC` was, for a long time, the standard way to connect to SQL Server. 
+`RODBC` was, for a long time, the standard way to connect to SQL Server from R. It's a great package that makes it easy to send queries, collect results, and handles type conversions pretty well. However, it is a bit slow for pushing data in. The fastest I could manage was using the `sqlSave` function with the safeties off. Very interested to hear if there's a better method. For 3m rows it's a no go. So scaling back to 30k rows we get:
+
+```{r rodbc}
+library(RODBC)
+
+db <- odbcDriverConnect('driver={SQL Server};server=localhost\\SQL17ML;database=ml;trusted_connection=true')
+
+n_rodbc <- 30000
+
+odbcQuery(db, "drop table randData;")
+time30k <- system.time({
+  RODBC::sqlSave(
+    db,
+    dat = random_data[1:n_rodbc,],
+    tablename = "randData",
+    rownames = FALSE,
+    fast = TRUE,
+    safer = FALSE
+  )
+})
+odbcClose(db)
+
+time30k
+```
+
+Over 2 minutes! It's been roughly linear for me so that total write time for 3m rows is a few hours.
 
 ## ODBC
 
-`odbc` is a relatively new package from RStudio which provides a DBI compliant ODBC interface.
+`odbc` is a relatively new package from RStudio which provides a DBI compliant ODBC interface. It is considerably faster for writes. Here we'll push the full 3m rows.
+
+```{r odbc}
+library(DBI)
+
+dbi <- dbConnect(odbc::odbc(),
+                 driver = "SQL Server",
+                 server="localhost\\SQL17ML",
+                 database = "ml")
+
+time3modbc <- system.time({
+  dbWriteTable(dbi,
+               name = "randData",
+               value = random_data,
+               overwrite = TRUE)
+})
+dbDisconnect(dbi)
+
+time3modbc
+```
 
 ## SQL Server External Script
 
