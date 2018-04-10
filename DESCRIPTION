@@ -1,0 +1,13 @@
+Package: dbloadss
+Title: Load simulated datasets in SQL Server
+Version: 0.0.0.9000
+Authors@R: person("Doug", "Ashton", email = "dashton@mango-solutions.com", role = c("aut", "cre"))
+Description: Testing SQL Server integration and speeds.
+Depends: R (>= 3.3.0)
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+RoxygenNote: 6.0.1
+Imports: stats
+Suggests: odbc,
+    RODBC
