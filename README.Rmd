@@ -14,14 +14,16 @@ knitr::opts_chunk$set(
 )
 ```
 
-# dbloadss
+# dbloadssss
 
-This package and accompanying scripts is to test load times to sql server with various
+This package and accompanying scripts is to test load times to MS SQL Server 17 (SS) from various methods:
 
-## Example
+1. Pull from SS with a stored procedure
+2. Push from R with `odbc`
+3. Push from R with `RODBC`
 
-This is a basic example which shows you how to solve a common problem:
+This package is really for number 1. We can do the rest from a script.
 
-```{r example}
-## basic example code
-```
+# License 
+
+MIT © Mango Solutions
