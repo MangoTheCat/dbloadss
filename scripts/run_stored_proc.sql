@@ -13,9 +13,9 @@ CREATE TABLE randData (
 INSERT INTO randData
 EXEC [dbo].[generate_random_data] @nrow = 3000000
 
-SELECT TOP (10) [COL_1]
-      ,[COL_2]
-      ,[COL_3]
-      ,[COL_4]
-      ,[COL_5]
-  FROM randData
+--SELECT TOP (10) [COL_1]
+--      ,[COL_2]
+--      ,[COL_3]
+--      ,[COL_4]
+--      ,[COL_5]
+--  FROM randData

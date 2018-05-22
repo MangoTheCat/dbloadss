@@ -24,6 +24,35 @@ This package and accompanying scripts is to test load times to MS SQL Server 17 
 
 This package is really for number 3. We can do the rest from a script, although it's a useful place to keep some functions.
 
+# Deploying R Models in SQL Server
+
+As an R user who is building models and analysing data one of the key challenges is how do you make those results available to those who need it? For reporting there are many options from writing [Excel files](https://www.mango-solutions.com/blog/r-the-excel-connection) to [rmarkdown documents](https://rmarkdown.rstudio.com/) and [shiny apps](https://shiny.rstudio.com/). A common situation is where results will be integrated into a business intelligence (BI) tool alongside a number of other critcial business metrics. In this situation you will be working with SQL developers to integrate your work. The question is, what is the best way to deliver R code to the BI team?
+
+In this blog post we will be looking at the specific case of deploying a predictive model, written in R, to a Microsoft SQL Server database for consumption by a BI tool. We will assume that the model runs in batch unattended, as a scheduled job.
+
+
+set up the simulation problem
+
+## Use Packages
+
+At Mango we believe that the basic unit of work is an R package. A well written R package will be self-documenting, have a familiar structure, and unit tests. All behind-the-scenes code can be written into unexported functions, and user facing code live in a small number (often one) of exported functions. This single entry point should be designed for someone who is not an R user to run the code, and if anything goes wrong, be as informative as possible.
+
+## Output Everything
+
+
+
+## Push or Pull?
+
+Once the model has been packaged and the interface decided, it remains to decide how to actually run the code. With SQL Server there are two options:
+
+1. Run the model from R and *push* the results to SQL Server using an ODBC connection.
+2. Call the model from SQL Server using a stored procedure to run an R script using R Services.
+
+
+
+
+
+
 # Test Database
 
 The code for this post runs on my Windows 10 laptop, where I have a local SQL Server 17 instance running, with a database called `ml`.
