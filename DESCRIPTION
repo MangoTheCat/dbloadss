@@ -13,4 +13,5 @@ Imports: stats,
     dplyr,
     tidyr
 Suggests: odbc,
-    RODBC
+    RODBC,
+    testthat
