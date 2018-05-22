@@ -26,12 +26,24 @@ This package is really for number 3. We can do the rest from a script, although 
 
 # Deploying R Models in SQL Server
 
-As an R user who is building models and analysing data one of the key challenges is how do you make those results available to those who need it? For reporting there are many options from writing [Excel files](https://www.mango-solutions.com/blog/r-the-excel-connection) to [rmarkdown documents](https://rmarkdown.rstudio.com/) and [shiny apps](https://shiny.rstudio.com/). A common situation is where results will be integrated into a business intelligence (BI) tool alongside a number of other critcial business metrics. In this situation you will be working with SQL developers to integrate your work. The question is, what is the best way to deliver R code to the BI team?
+As an R user who is building models and analysing data one of the key challenges is how do you make those results available to those who need it? After all, data science is about making better decisions, and your results need to get into the hands of the people who make those decisions.
 
-In this blog post we will be looking at the specific case of deploying a predictive model, written in R, to a Microsoft SQL Server database for consumption by a BI tool. We will assume that the model runs in batch unattended, as a scheduled job.
+For reporting there are many options from writing [Excel files](https://www.mango-solutions.com/blog/r-the-excel-connection) to [rmarkdown documents](https://rmarkdown.rstudio.com/) and [shiny apps](https://shiny.rstudio.com/). A very common situation is where model results will be integrated into a business intelligence (BI) tool alongside a number of other critcial business metrics. Moreover the results need to be refreshed daily. In this situation you will be working with SQL developers to integrate your work. The question is, what is the best way to deliver R code to the BI team?
+
+In this blog post we will be looking at the specific case of deploying a predictive model, written in R, to a Microsoft SQL Server database for consumption by a BI tool. Since SQL Server 16 it is possible to run R services in-database. We'll compare this to controlling the process from R and pushing with [ODBC](https://en.wikipedia.org/wiki/Open_Database_Connectivity).
+
+## Flight delay planning
+
+To demonstrate we'll use the `flights` dataset from the [nycflights13](https://CRAN.R-project.org/package=nycflights13) package to imagine that we are airport planners and we want to test various scenarios related to flight delays. Our data contains the departure delay of all flights leaving the New York airports: JFK, LGA, and EWR in 2013.
+
+```{r, peakflights, echo=FALSE}
+head(nycflights13::flights[c("flight", "origin", "dest", "sched_dep_time", 
+                             "carrier", "time_hour", "dep_delay")])
+```
 
 
-set up the simulation problem
+
+We will assume that the model runs in batch unattended, as a scheduled job.
 
 ## Use Packages
 
@@ -39,7 +51,7 @@ At Mango we believe that the basic unit of work is an R package. A well written 
 
 ## Output Everything
 
-
+A data scientist will ask: "how can I predict `dep_delay` as accurately as possible?". An airport manager will want to know "how often will the last flight of the day leave after midnight?", or another question that you haven't thought of.
 
 ## Push or Pull?
 
@@ -82,7 +94,7 @@ but what we're interested in is how fast to push this to SQL Server?.
 
 `RODBC` was, for a long time, the standard way to connect to SQL Server from R. It's a great package that makes it easy to send queries, collect results, and handles type conversions pretty well. However, it is a bit slow for pushing data in. The fastest I could manage was using the `sqlSave` function with the safeties off. Very interested to hear if there's a better method. For 3m rows it's a no go. So scaling back to 30k rows we get:
 
-```{r rodbc}
+```{r rodbc, eval=FALSE}
 library(RODBC)
 
 db <- odbcDriverConnect('driver={SQL Server};server=localhost\\SQL17ML;database=ml;trusted_connection=true')
@@ -111,7 +123,7 @@ Over 2 minutes! It's been roughly linear for me so that total write time for 3m 
 
 `odbc` is a relatively new package from RStudio which provides a DBI compliant ODBC interface. It is considerably faster for writes. Here we'll push the full 3m rows.
 
-```{r odbc}
+```{r odbc, eval=FALSE}
 library(DBI)
 
 dbi <- dbConnect(odbc::odbc(),
