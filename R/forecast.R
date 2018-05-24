@@ -1,7 +1,7 @@
 
 #' Simulate flight departure delays
 #'
-#' @param flights_in Data Frame. Input data set
+#' @param flights_in Data Frame. Input data set (flights) with an id variable
 #' @param nsim Int. How many simulation runs
 #' @param split_date A date or ISO 8601 character string to split the data on
 #'
