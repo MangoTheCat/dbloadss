@@ -16,9 +16,12 @@
 #'   results <- simulate_departure_delays(flights, nsim = 10)
 #' }
 simulate_departure_delays <- function(flights_in, nsim = 20,
-                                      split_date = "2013-06-01") {
+                                      split_date = "2013-07-01") {
 
   time_hour <- date <- week_day <- NULL # not global
+
+  # Ensure split_date is a date
+  split_date <- as.Date(split_date)
 
   # Transform and split the data
   flights_eng <- flights_in %>%
