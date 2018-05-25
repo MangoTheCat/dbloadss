@@ -10,7 +10,7 @@ As an R user who is building models and analysing data one of the key challenges
 
 For reporting there are many options from writing [Excel files](https://www.mango-solutions.com/blog/r-the-excel-connection) to [rmarkdown documents](https://rmarkdown.rstudio.com/) and [shiny apps](https://shiny.rstudio.com/). Many businesses will require results to go into a business intelligence (BI) tool alongside a number of other critcial business metrics. Moreover the results need to be refreshed daily. In this situation you will be working with SQL developers to integrate your work. The question is, what is the best way to deliver R code to the BI team?
 
-In this blog post we will be looking at the specific case of deploying a predictive model, written in R, to a Microsoft SQL Server database for consumption by a BI tool. Since SQL Server 16 it is possible to run R services in-database. We'll compare this to controlling the process from R and pushing with [ODBC](https://en.wikipedia.org/wiki/Open_Database_Connectivity).
+In this blog post we will be looking at the specific case of deploying a predictive model, written in R, to a Microsoft SQL Server database for consumption by a BI tool. We'll look at some of the different options to integrate R, from in-database R services, to pushing from with [ODBC](https://en.wikipedia.org/wiki/Open_Database_Connectivity) or flat files from [SSIS](https://docs.microsoft.com/en-gb/sql/integration-services/sql-server-integration-services).
 
 ### Flight delay planning
 
@@ -44,7 +44,7 @@ model <- lme4::lmer(
   )
 ```
 
-This is a simple model for demonstration purpopses. For example, it doesn't capture big delays (extreme values) well, but it will serve our purpose. The full model code and data prep is available at [mangothecat/dbloadss](https://github.com/mangothecat/dbloadss) so we won't go through every line here.
+This is a simple model for demonstration purposes. For example, it doesn't capture big delays (extreme values) well, but it will serve our purpose. The full model code and data prep is available at [mangothecat/dbloadss](https://github.com/mangothecat/dbloadss) so we won't go through every line here.
 
 Implementation
 --------------
@@ -55,7 +55,13 @@ The data scientist has done their exploratory work, made some nice notebooks, an
 
 At Mango we believe that the basic unit of work is a package. A well written package will be self-documenting, have a familiar structure, and unit tests. All behind-the-scenes code can be written into unexported functions, and user facing code lives in a small number (often one) of exported functions. This single entry point should be designed for someone who is not an R user to run the code, and if anything goes wrong, be as informative as possible.
 
-The code for this blog post lives in the [dbloadss](https://github.com/mangothecat/dbloadss) package available on GitHub.
+The code for this blog post lives in the [dbloadss](https://github.com/mangothecat/dbloadss) package available on GitHub. For the flights model a single function is exported `simulate_departure_delays`, which is documented to explain exactly what it expects as input, and what it will output. The entire model runs with the single line:
+
+``` r
+output_data <- simulate_departure_delays(input_data, nsim = 20)
+```
+
+where the `input_data` is prepared from the database and `output_data` will be pushed/pulled back to the database.
 
 ### Output Everything
 
@@ -65,145 +71,129 @@ Of course we can use R to answer each of these questions one at a time. However,
 
 Fortunately, this is exactly the kind of thing that SQL and BI tools are built to do. So instead of processing the results in R we will output every simulation run into SQL Server and do the post processing in the database or BI tool.
 
-### Push or Pull?
+### Push, Pull, or Pickup?
 
 Once the model has been packaged and the interface decided, it remains to decide how to actually run the code. With SQL Server there are three options:
 
 1.  Run the model from R and *push* the results to SQL Server using an ODBC connection.
 2.  Call the model from SQL Server using a stored procedure to run an R script using R Services and *pull* the results back.
-3.  Invoke an Rscript from SSIS.
+3.  Invoke an Rscript from SSIS and *pickup* flat files (csv).
 
-Which you choose will depend on a number of factors. Most importantly the skill set of the people managing the process. We'll take some time to look at each one.
+Which you choose will depend on a number of factors. We'll take some time to look at each one.
 
 The Push (SQL from R)
 ---------------------
 
-The Pull (R from SQL)
----------------------
+The best way to talk to a database from R is to use the [DBI](http://r-dbi.github.io/DBI/) database interface package. The [DBI project](https://r-dbi.org.) has been around for a while but received a boost with R Consortium funding. It provides a common interface to many databases integrating specific backend packages to each separate database type. For SQL Server we're going to use the [odbc](https://CRAN.R-project.org/package=odbc) backend. It has [great documentation](https://db.rstudio.com/odbc/) and since Microsoft released [ODBC drivers for Linux](https://docs.microsoft.com/en-us/sql/connect/odbc/microsoft-odbc-driver-for-sql-server) it's a cinch to setup from most operating systems.
 
-The Shift (R from SSIS)
------------------------
-
-<!-- Blend the below benchmark in -->
-Test Database
-=============
-
-The code for this post runs on my Windows 10 laptop, where I have a local SQL Server 17 instance running, with a database called `ml`.
-
-Load Times
-==========
-
-We're going to push a big data frame into SQL Server using three methods. The data set is a simple randomly generated data frame.
-
-``` r
-library(dbloadss)
-
-random_data_set(n_rows = 5, n_cols = 5)
-```
-
-    ##      COL_1    COL_2    COL_3     COL_4    COL_5
-    ## 1 4.295615 5.539700 4.334157 0.6487283 7.612783
-    ## 2 0.033995 6.376495 0.433236 2.3049353 2.036160
-    ## 3 3.725420 7.048729 1.841131 6.8994631 7.716952
-    ## 4 3.073810 8.147071 2.654020 2.5835894 8.535301
-    ## 5 4.962280 8.692725 6.410752 8.2748814 6.859934
-
-R is pretty quick at this sort of thing so we don't really need to worry about how long it takes to make a big data frame.
-
-``` r
-n_rows <- 3000000
-system.time({
-  random_data <- random_data_set(n_rows = n_rows, n_cols = 5)
-})
-```
-
-    ##    user  system elapsed 
-    ##    0.78    0.02    0.81
-
-but what we're interested in is how fast to push this to SQL Server?.
-
-RODBC
------
-
-`RODBC` was, for a long time, the standard way to connect to SQL Server from R. It's a great package that makes it easy to send queries, collect results, and handles type conversions pretty well. However, it is a bit slow for pushing data in. The fastest I could manage was using the `sqlSave` function with the safeties off. Very interested to hear if there's a better method. For 3m rows it's a no go. So scaling back to 30k rows we get:
-
-``` r
-library(RODBC)
-
-db <- odbcDriverConnect('driver={SQL Server};server=localhost\\SQL17ML;database=ml;trusted_connection=true')
-
-n_rodbc <- 30000
-
-odbcQuery(db, "drop table randData;")
-time30k <- system.time({
-  RODBC::sqlSave(
-    db,
-    dat = random_data[1:n_rodbc,],
-    tablename = "randData",
-    rownames = FALSE,
-    fast = TRUE,
-    safer = FALSE
-  )
-})
-odbcClose(db)
-
-time30k
-```
-
-Over 2 minutes! It's been roughly linear for me so that total write time for 3m rows is a few hours.
-
-ODBC
-----
-
-`odbc` is a relatively new package from RStudio which provides a DBI compliant ODBC interface. It is considerably faster for writes. Here we'll push the full 3m rows.
+Let's get the flights data from SQL Server. I'm running this code on my Windows 10 laptop, where I have a local SQL Server 17 instance running, with a database called `ml`.
 
 ``` r
 library(DBI)
-
-dbi <- dbConnect(odbc::odbc(),
-                 driver = "SQL Server",
-                 server="localhost\\SQL17ML",
-                 database = "ml")
-
-time3modbc <- system.time({
-  dbWriteTable(dbi,
-               name = "randData",
-               value = random_data,
-               overwrite = TRUE)
-})
-dbDisconnect(dbi)
-
-time3modbc
 ```
 
-SQL Server External Script
---------------------------
+    ## Warning: package 'DBI' was built under R version 3.4.4
+
+``` r
+con <- dbConnect(odbc::odbc(),
+                 driver = "SQL Server",
+                 server = "localhost\\SQL17ML",
+                 database = "ml")
+
+flights <- dbReadTable(con, Id(schema="dbo", name="flights"))
+```
+
+    ## Note: method with signature 'DBIConnection#SQL' chosen for function 'dbQuoteIdentifier',
+    ##  target signature 'Microsoft SQL Server#SQL'.
+    ##  "OdbcConnection#character" would also be valid
+
+I've included the the explicit `schema` argument because it's a recent addition to DBI and it can be a sticking point for complicated database structures.
+
+Now we run the model as above
+
+``` r
+library(dbloadss)
+output_data <- simulate_departure_delays(flights, nsim = 20, split_date = "2013-07-01")
+```
+
+    ## Warning: package 'bindrcpp' was built under R version 3.4.4
+
+``` r
+dim(output_data)
+```
+
+    ## [1] 3412360       3
+
+So for 20 simulations we have about 3.5 million rows of output! It's just a flight ID (for joining back to the source), a simulation ID, and a delay.
+
+``` r
+head(output_data)
+```
+
+    ##      id sim_id dep_delay
+    ## 1 27005      1 -71.89478
+    ## 2 27006      1 -11.45580
+    ## 3 27007      1 -40.13963
+    ## 4 27008      1 -18.66967
+    ## 5 27009      1  31.82002
+    ## 6 27010      1 -13.28023
+
+We'll do all further processing in the database so let's push it back.
+
+``` r
+# Workaround for known issue https://github.com/r-dbi/odbc/issues/175
+dbRemoveTable(con, name = Id(schema = "dbo", name = "flightsdelays"))
+
+odbctime <- system.time({
+  dbWriteTable(con,
+               name = Id(schema = "dbo", name = "flightsdelays"),
+               value = output_data,
+               overwrite = TRUE)
+})
+odbctime
+```
+
+    ##    user  system elapsed 
+    ##   10.09    0.35   74.89
+
+That took under 2 minutes. This post started life as a benchmark of write times from odbc vs [RODBC](https://CRAN.R-project.org/package=RODBC), an alternative way to talk to SQL Server. The results are on the [dbloadss README](https://github.com/mangothecat/dbloadss) and suggest this would take several hours! RODBC is usually fine for reads but we recommend switching to odbc where possible.
+
+It is relatively straight forward to push from R and this could run as a scheduled job from a server running R.
+
+The Pull (R from SQL)
+---------------------
+
+MOSTLY TODO. THE SQL BELOW IS CORRECT
 
 An alternative approach is to use the new features in SQL Server 17 (and 16) for calling out to R scripts from SQL. This is done via the `sp_execute_external_script` command, which we will wrap in a stored procedure. This is what that looks like for me:
 
 ``` sql
 use [ml];
 
-DROP PROC IF EXISTS generate_random_data;
+DROP PROC IF EXISTS r_simulate_departure_delays;
 GO
-CREATE PROC generate_random_data(@nrow int)
+CREATE PROC r_simulate_departure_delays(
+    @nsim int = 20,
+    @split_date date = "2013-07-01")
 AS
 BEGIN
  EXEC sp_execute_external_script
-       @language = N'R'  
-     , @script = N'  
-          library(dbloadss)
-          random_data <- random_data_set(n_rows = nrow_r, n_cols = 5)
+     @language = N'R'  
+   , @script = N'
+    library(dbloadss)
+    output_data <- simulate_departure_delays(input_data, nsim = nsim_r,
+                                             split_date = split_date_r)
 ' 
-   , @output_data_1_name = N'random_data'
-     , @params = N'@nrow_r int'
-     , @nrow_r = @nrow
+   , @input_data_1 = N' SELECT * FROM [dbo].[flights];'
+   , @input_data_1_name = N'input_data'
+   , @output_data_1_name = N'output_data'
+   , @params = N'@nsim_r int, @split_date_r date'
+   , @nsim_r = @nsim
+   , @split_date_r = @split_date
     WITH RESULT SETS ((
-          "COL_1" float not null,   
-        "COL_2" float not null,  
-        "COL_3" float not null,   
-        "COL_4" float not null,
-            "COL_5" float not null)); 
+        "id" int not null,   
+        "sim_id" int not null,  
+        "dep_delay" float not null)); 
 END;
 GO
 ```
@@ -211,15 +201,13 @@ GO
 We then call the stored procedure with another query (skipping out a step that clears it inbetween tests).
 
 ``` sql
-INSERT INTO randData
-EXEC [dbo].[generate_random_data] @nrow = 3000000
+INSERT INTO [dbo].[flightdelays]
+EXEC [dbo].[r_simulate_departure_delays] @nsim = 20
 ```
-
-![SQL Server Timer](SStime.jpg)
 
 and this runs in 34 seconds. My best guess for the performance increase is that the data is serialised more efficiently. More to investigate.
 
-License
-=======
+The Pickup (R from SSIS)
+------------------------
 
-MIT © Mango Solutions
+TODO

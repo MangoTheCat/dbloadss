@@ -136,6 +136,7 @@ It is relatively straight forward to push from R and this could run as a schedul
 
 ## The Pull (R from SQL)
 
+MOSTLY TODO. THE SQL BELOW IS CORRECT
 
 An alternative approach is to use the new features in SQL Server 17 (and 16) for calling out to R scripts from SQL. This is done via the `sp_execute_external_script` command, which we will wrap in a stored procedure. This is what that looks like for me:
 
@@ -181,4 +182,4 @@ and this runs in 34 seconds. My best guess for the performance increase is that 
 
 ## The Pickup (R from SSIS)
 
-
+TODO
