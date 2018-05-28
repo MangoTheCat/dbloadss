@@ -3,18 +3,19 @@ Deploying R Models in SQL Server
 Doug Ashton
 23 May 2018
 
-Introduction
-------------
-
 As an R user who is building models and analysing data one of the key challenges is how do you make those results available to those who need it? After all, data science is about making better decisions, and your results need to get into the hands of the people who make those decisions.
 
 For reporting there are many options from writing [Excel files](https://www.mango-solutions.com/blog/r-the-excel-connection) to [rmarkdown documents](https://rmarkdown.rstudio.com/) and [shiny apps](https://shiny.rstudio.com/). Many businesses will require results to go into a business intelligence (BI) tool alongside a number of other critcial business metrics. Moreover the results need to be refreshed daily. In this situation you will be working with SQL developers to integrate your work. The question is, what is the best way to deliver R code to the BI team?
 
 In this blog post we will be looking at the specific case of deploying a predictive model, written in R, to a Microsoft SQL Server database for consumption by a BI tool. We'll look at some of the different options to integrate R, from in-database R services, to pushing from with [ODBC](https://en.wikipedia.org/wiki/Open_Database_Connectivity) or flat files from [SSIS](https://docs.microsoft.com/en-gb/sql/integration-services/sql-server-integration-services).
 
-### Flight delay planning
+The Problem
+===========
 
-To demonstrate we'll use the `flights` dataset from the [nycflights13](https://CRAN.R-project.org/package=nycflights13) package to imagine that we are airport planners and we want to test various scenarios related to flight delays. Our data contains the departure delay of all flights leaving the New York airports: JFK, LGA, and EWR in 2013. We've already loaded the dataset into SQL Server. Below is a selection of columns.
+Flight delay planning
+---------------------
+
+To demonstrate we'll use the familiar `flights` dataset from the [nycflights13](https://CRAN.R-project.org/package=nycflights13) package to imagine that we are airport planners and we want to test various scenarios related to flight delays. Our data contains the departure delay of all flights leaving the New York airports: JFK, LGA, and EWR in 2013. We've already loaded the dataset into SQL Server. Below is a selection of columns.
 
 ``` sql
 SELECT TOP(5) flight, origin, dest, sched_dep_time, carrier, time_hour, dep_delay
@@ -46,12 +47,21 @@ model <- lme4::lmer(
 
 This is a simple model for demonstration purposes. For example, it doesn't capture big delays (extreme values) well, but it will serve our purpose. The full model code and data prep is available at [mangothecat/dbloadss](https://github.com/mangothecat/dbloadss) so we won't go through every line here.
 
+To simulate delays on future flights we can call the `simulate` function. Here we'll run 10 different scenarios:
+
+``` r
+sim_delays <- simulate(model, nsim = 10, newdata = data_test)
+```
+
+The reason we're using `simulate` rather than `predict` is that we don't just want the most likely value for each delay, we want to sample from likely scenarios.
+
 Implementation
---------------
+==============
 
 The data scientist has done their exploratory work, made some nice notebooks, and are really happy with their p-values. How do we now deploy their model?
 
-### Use Packages
+Use Packages
+------------
 
 At Mango we believe that the basic unit of work is a package. A well written package will be self-documenting, have a familiar structure, and unit tests. All behind-the-scenes code can be written into unexported functions, and user facing code lives in a small number (often one) of exported functions. This single entry point should be designed for someone who is not an R user to run the code, and if anything goes wrong, be as informative as possible.
 
@@ -63,7 +73,8 @@ output_data <- simulate_departure_delays(input_data, nsim = 20)
 
 where the `input_data` is prepared from the database and `output_data` will be pushed/pulled back to the database.
 
-### Output Everything
+Output Everything
+-----------------
 
 A data scientist will ask: "how can I predict `dep_delay` as accurately as possible?". An airport manager will want to know "how often will the last flight of the day leave after midnight?", or another question that you haven't thought of.
 
@@ -71,7 +82,11 @@ Of course we can use R to answer each of these questions one at a time. However,
 
 Fortunately, this is exactly the kind of thing that SQL and BI tools are built to do. So instead of processing the results in R we will output every simulation run into SQL Server and do the post processing in the database or BI tool.
 
-### Push, Pull, or Pickup?
+Connecting to the Database
+==========================
+
+Push, Pull, or Pickup?
+----------------------
 
 Once the model has been packaged and the interface decided, it remains to decide how to actually run the code. With SQL Server there are three options:
 
@@ -90,11 +105,6 @@ Let's get the flights data from SQL Server. I'm running this code on my Windows 
 
 ``` r
 library(DBI)
-```
-
-    ## Warning: package 'DBI' was built under R version 3.4.4
-
-``` r
 con <- dbConnect(odbc::odbc(),
                  driver = "SQL Server",
                  server = "localhost\\SQL17ML",
@@ -103,10 +113,6 @@ con <- dbConnect(odbc::odbc(),
 flights <- dbReadTable(con, Id(schema="dbo", name="flights"))
 ```
 
-    ## Note: method with signature 'DBIConnection#SQL' chosen for function 'dbQuoteIdentifier',
-    ##  target signature 'Microsoft SQL Server#SQL'.
-    ##  "OdbcConnection#character" would also be valid
-
 I've included the the explicit `schema` argument because it's a recent addition to DBI and it can be a sticking point for complicated database structures.
 
 Now we run the model as above
@@ -114,11 +120,6 @@ Now we run the model as above
 ``` r
 library(dbloadss)
 output_data <- simulate_departure_delays(flights, nsim = 20, split_date = "2013-07-01")
-```
-
-    ## Warning: package 'bindrcpp' was built under R version 3.4.4
-
-``` r
 dim(output_data)
 ```
 
@@ -130,23 +131,23 @@ So for 20 simulations we have about 3.5 million rows of output! It's just a flig
 head(output_data)
 ```
 
-    ##      id sim_id dep_delay
-    ## 1 27005      1 -71.89478
-    ## 2 27006      1 -11.45580
-    ## 3 27007      1 -40.13963
-    ## 4 27008      1 -18.66967
-    ## 5 27009      1  31.82002
-    ## 6 27010      1 -13.28023
+    ##      id sim_id  dep_delay
+    ## 1 27005      1  38.270825
+    ## 2 27006      1 -17.450925
+    ## 3 27007      1   3.304186
+    ## 4 27008      1   2.450715
+    ## 5 27009      1  -3.193194
+    ## 6 27010      1 -33.984294
 
 We'll do all further processing in the database so let's push it back.
 
 ``` r
 # Workaround for known issue https://github.com/r-dbi/odbc/issues/175
-dbRemoveTable(con, name = Id(schema = "dbo", name = "flightsdelays"))
+dbRemoveTable(con, name = Id(schema = "dbo", name = "flightdelays"))
 
 odbctime <- system.time({
   dbWriteTable(con,
-               name = Id(schema = "dbo", name = "flightsdelays"),
+               name = Id(schema = "dbo", name = "flightdelays"),
                value = output_data,
                overwrite = TRUE)
 })
@@ -154,7 +155,7 @@ odbctime
 ```
 
     ##    user  system elapsed 
-    ##   10.09    0.35   74.89
+    ##   10.08    0.47  114.60
 
 That took under 2 minutes. This post started life as a benchmark of write times from odbc vs [RODBC](https://CRAN.R-project.org/package=RODBC), an alternative way to talk to SQL Server. The results are on the [dbloadss README](https://github.com/mangothecat/dbloadss) and suggest this would take several hours! RODBC is usually fine for reads but we recommend switching to odbc where possible.
 
@@ -163,9 +164,15 @@ It is relatively straight forward to push from R and this could run as a schedul
 The Pull (R from SQL)
 ---------------------
 
-MOSTLY TODO. THE SQL BELOW IS CORRECT
+An alternative approach is to use the new features in SQL Server 17 (and 16) for calling out to R scripts from SQL. This is done via the `sp_execute_external_script` command, which we will wrap in a stored procedure. This method is great for SQL developers because they don't need to go outside their normal tool and they can have greater control about exactly what is returned and where it goes.
 
-An alternative approach is to use the new features in SQL Server 17 (and 16) for calling out to R scripts from SQL. This is done via the `sp_execute_external_script` command, which we will wrap in a stored procedure. This is what that looks like for me:
+A word of warning before we continue. There's a line in the [Microsoft docs](https://docs.microsoft.com/en-us/sql/advanced-analytics/install/sql-r-services-windows-install?view=sql-server-2017):
+
+> Do not install R Services on a failover cluster. The security mechanism used for isolating R processes is not compatible with a Windows Server failover cluster environment.
+
+that somewhat limits the ultimate use of this technique in production settings as a failover cluster is a very common configuration. Assuming this might get fixed, or perhaps it's not an issue for you, let's see how it works.
+
+The following stored procedure is what we'll add for our flight delays model:
 
 ``` sql
 use [ml];
@@ -198,16 +205,31 @@ END;
 GO
 ```
 
-We then call the stored procedure with another query (skipping out a step that clears it inbetween tests).
+The query that goes into `@input_data_1` becomes a data frame in your R session. The main things to note are that you can pass in as many parameters as you like, but only *one* data frame. Your R script assigns the results to a nominated output data frame and this is picked up and returned to SQL server.
+
+I believe it's very important that the R script that is inside the stored procedure does not get too complicated. Much better to use your single entry point and put complex code in a package where it can be unit tested and documented.
+
+We then call the stored procedure with another query:
 
 ``` sql
 INSERT INTO [dbo].[flightdelays]
 EXEC [dbo].[r_simulate_departure_delays] @nsim = 20
 ```
 
-and this runs in 34 seconds. My best guess for the performance increase is that the data is serialised more efficiently. More to investigate.
+The perforance of this method seems to be good. For write speeds in our tests it was faster even than pushing with odbc, although it's harder to benchmark in the flights example because it includes running the simulation.
+
+Overall, were it not for the issue with failover clusters I would be recommending this as the best way to integrate R with SQL Server. As it stands you'll have to evaluate on your setup.
 
 The Pickup (R from SSIS)
 ------------------------
 
-TODO
+The final method is to use [SSIS](https://docs.microsoft.com/en-gb/sql/integration-services/sql-server-integration-services) to treat running the R model as an [ETL](https://en.wikipedia.org/wiki/Extract,_transform,_load) process. To keep things simple we use SSIS to output the input data as a flat file (csv), kick-off an R process to run the job, and *pickup* the results from another csv. This means that we'll be making our R code run as a commandline tool and using a csv "air gap".
+
+Running R from the command line is relatively straight forward. To handle parameters we've found the best way is to use [argparser](https://CRAN.R-project.org/package=argparser), also honourable mention to [optparse](https://CRAN.R-project.org/package=optparse). Checkout [Mark's blog post series on building R command line applications](http://blog.sellorm.com/2017/12/18/learn-to-write-command-line-utilities-in-r/). After you've parsed the arguments everything is essentially the same as pushing straight to the database, except that you write to csv at the end.
+
+The SSIS solution has some great advantages in that it is controlled by the SQL developers, it has the greatest separation of technologies, and it's easy to test the R process in isolation. Downsides are it's unlikely that going via csv will be the fastest, and you need to be a little more careful about data types.
+
+The Results
+===========
+
+Over to the BI team. Show a plot.
