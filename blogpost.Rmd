@@ -243,5 +243,9 @@ It turns out the daily variation means you don't learn much from this plot. Mayb
 
 # Conclusion
 
-Conclusion
+Conclusion (expand a bit)
+
+* DS does not exist in a vacuum.
+* Always serve your code from a package with as few exported functions as possible.
+* We like in-database R but failover was a deal breaker.
 
