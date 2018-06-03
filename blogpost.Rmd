@@ -212,7 +212,13 @@ The SSIS solution has some great advantages in that it is controlled by the SQL 
 
 # The Results
 
-If everything goes well the results of your delays simulation will land in the database every night, and every morning reports can be built and dashboards updated. Your work is not totally done. There is a one of cost of getting the dashboards setup. The simulation results are not always the easiest to get your head around so it helps if you can setup the BI team with a few queries just to get started. For example: To generate a daily average delay for the airline `UA`, they would need something like the following:
+If everything goes well the results of your delays simulation will land in the database every night, and every morning reports can be built and dashboards updated. The results look something like this:
+
+```{sql, sqlresults, connection=consql}
+SELECT TOP(5) * FROM flightdelays
+```
+
+Your work is not totally done. There is a one of cost of getting the dashboards setup. The simulation results are not always the easiest to get your head around so it helps if you can setup the BI team with a few queries just to get started. For example: To generate a daily average delay for the airline `UA`, they would need something like the following:
 
 ```sql
 WITH gp AS (
@@ -235,7 +241,7 @@ GROUP BY origin, day_date
 ORDER BY day_date, origin
 ```
 
-So first you aggregate over each simulation, then you aggregated across simulations. Your BI team's SQL is better than yours (and definitely mine) so this can be a useful way to get feedback on your code. Loading up a table like this into a BI tool (for example Power BI) you can get all the plots you're used to.
+So first you aggregate over each simulation, then you aggregated across simulations. Your BI team's SQL is better than yours (and definitely mine) so this can be a useful way to get feedback on your code and it's also a good way to explain what your model does to them (code speaks louder than words). Loading up a table like this into a BI tool (for example Power BI) you can get all the plots you're used to.
 
 THE PLOT
 
