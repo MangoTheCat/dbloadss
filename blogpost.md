@@ -3,11 +3,11 @@ Deploying R Models in SQL Server
 Doug Ashton
 23 May 2018
 
-As an R user who is building models and analysing data one of the key challenges is how do you make those results available to those who need it? After all, data science is about making better decisions, and your results need to get into the hands of the people who make those decisions.
+As an R user who is building models and analysing data one of the key challenges is how do you make those results available to those who need it? After all, [data science is about making better decisions](https://www.mango-solutions.com/blog/a-definition-of-data-science), and your results need to get into the hands of the people who make those decisions.
 
-For reporting there are many options from writing [Excel files](https://www.mango-solutions.com/blog/r-the-excel-connection) to [rmarkdown documents](https://rmarkdown.rstudio.com/) and [shiny apps](https://shiny.rstudio.com/). Many businesses will require results to go into a business intelligence (BI) tool alongside a number of other critcial business metrics. Moreover the results need to be refreshed daily. In this situation you will be working with SQL developers to integrate your work. The question is, what is the best way to deliver R code to the BI team?
+For reporting there are many options from writing [Excel files](https://www.mango-solutions.com/blog/r-the-excel-connection) to [rmarkdown documents](https://rmarkdown.rstudio.com/) and [shiny apps](https://shiny.rstudio.com/). Many businesses already have great reporting with a business intelligence (BI) tool. For them it is preferenable that you present your results alongside a number of other critcial business metrics. Moreover your results need to be refreshed daily. In this situation you will be working with SQL developers to integrate your work. The question is, what is the best way to deliver R code to the BI team?
 
-In this blog post we will be looking at the specific case of deploying a predictive model, written in R, to a Microsoft SQL Server database for consumption by a BI tool. We'll look at some of the different options to integrate R, from in-database R services, to pushing from with [ODBC](https://en.wikipedia.org/wiki/Open_Database_Connectivity) or flat files from [SSIS](https://docs.microsoft.com/en-gb/sql/integration-services/sql-server-integration-services).
+In this blog post we will be looking at the specific case of deploying a predictive model, written in R, to a Microsoft SQL Server database for consumption by a BI tool. We'll look at some of the different options to integrate R, from in-database R services, to pushing with [ODBC](https://en.wikipedia.org/wiki/Open_Database_Connectivity) or picking up flat files with [SSIS](https://docs.microsoft.com/en-gb/sql/integration-services/sql-server-integration-services).
 
 The Problem
 ===========
@@ -15,7 +15,7 @@ The Problem
 Flight delay planning
 ---------------------
 
-To demonstrate we'll use the familiar `flights` dataset from the [nycflights13](https://CRAN.R-project.org/package=nycflights13) package to imagine that we are airport planners and we want to test various scenarios related to flight delays. Our data contains the departure delay of all flights leaving the New York airports: JFK, LGA, and EWR in 2013. We've already loaded the dataset into SQL Server. Below is a selection of columns.
+To demonstrate we'll use the familiar `flights` dataset from the [nycflights13](https://CRAN.R-project.org/package=nycflights13) package to imagine that we are airport planners and we want to test various scenarios related to flight delays. Our data contains the departure delay of all flights leaving the New York airports: JFK, LGA, and EWR in 2013. I'm running this code on my Windows 10 laptop, where I have a local SQL Server 17 instance running, with a database called `ml`. If you want to reproduce the code you'll need to have your own SQL Server setup (you can install it locally) and push the flights table there. Here's a selection of columns:
 
 ``` sql
 SELECT TOP(5) flight, origin, dest, sched_dep_time, carrier, time_hour, dep_delay
@@ -53,7 +53,7 @@ To simulate delays on future flights we can call the `simulate` function. Here w
 sim_delays <- simulate(model, nsim = 10, newdata = data_test)
 ```
 
-The reason we're using `simulate` rather than `predict` is that we don't just want the most likely value for each delay, we want to sample from likely scenarios.
+The reason we're using `simulate` rather than `predict` is that we don't just want the most likely value for each delay, we want to sample from likely scenarios. That way we can report any aspect of the result that seems relevant.
 
 Implementation
 ==============
@@ -63,7 +63,7 @@ The data scientist has done their exploratory work, made some nice notebooks, an
 Use Packages
 ------------
 
-At Mango we believe that the basic unit of work is a package. A well written package will be self-documenting, have a familiar structure, and unit tests. All behind-the-scenes code can be written into unexported functions, and user facing code lives in a small number (often one) of exported functions. This single entry point should be designed for someone who is not an R user to run the code, and if anything goes wrong, be as informative as possible.
+At Mango we believe that the basic unit of work is a package. A well written package will be self-documenting, have a familiar structure, and unit tests. All behind-the-scenes code can be written into unexported functions, and user facing code lives in a small number (often one) of exported functions. This single entry point should be designed for someone who is not an experienced R user to run the code, and if anything goes wrong, be as informative as possible. R is particularly friendly for building packages, with the excellent [devtools](https://CRAN.R-project.org/package=devtools) automating most of it, and the wonderfully short [R packages](http://r-pkgs.had.co.nz/) book by Hadley guiding you through it all.
 
 The code for this blog post lives in the [dbloadss](https://github.com/mangothecat/dbloadss) package available on GitHub. For the flights model a single function is exported `simulate_departure_delays`, which is documented to explain exactly what it expects as input, and what it will output. The entire model runs with the single line:
 
@@ -101,7 +101,7 @@ The Push (SQL from R)
 
 The best way to talk to a database from R is to use the [DBI](http://r-dbi.github.io/DBI/) database interface package. The [DBI project](https://r-dbi.org.) has been around for a while but received a boost with R Consortium funding. It provides a common interface to many databases integrating specific backend packages to each separate database type. For SQL Server we're going to use the [odbc](https://CRAN.R-project.org/package=odbc) backend. It has [great documentation](https://db.rstudio.com/odbc/) and since Microsoft released [ODBC drivers for Linux](https://docs.microsoft.com/en-us/sql/connect/odbc/microsoft-odbc-driver-for-sql-server) it's a cinch to setup from most operating systems.
 
-Let's get the flights data from SQL Server. I'm running this code on my Windows 10 laptop, where I have a local SQL Server 17 instance running, with a database called `ml`.
+Let's get the flights data from SQL Server:
 
 ``` r
 library(DBI)
@@ -132,12 +132,12 @@ head(output_data)
 ```
 
     ##      id sim_id  dep_delay
-    ## 1 27005      1  38.270825
-    ## 2 27006      1 -17.450925
-    ## 3 27007      1   3.304186
-    ## 4 27008      1   2.450715
-    ## 5 27009      1  -3.193194
-    ## 6 27010      1 -33.984294
+    ## 1 27005      1 -61.926909
+    ## 2 27006      1  46.188641
+    ## 3 27007      1  43.512647
+    ## 4 27008      1  15.245413
+    ## 5 27009      1   6.763471
+    ## 6 27010      1  -8.482736
 
 We'll do all further processing in the database so let's push it back.
 
@@ -225,11 +225,61 @@ The Pickup (R from SSIS)
 
 The final method is to use [SSIS](https://docs.microsoft.com/en-gb/sql/integration-services/sql-server-integration-services) to treat running the R model as an [ETL](https://en.wikipedia.org/wiki/Extract,_transform,_load) process. To keep things simple we use SSIS to output the input data as a flat file (csv), kick-off an R process to run the job, and *pickup* the results from another csv. This means that we'll be making our R code run as a commandline tool and using a csv "air gap".
 
-Running R from the command line is relatively straight forward. To handle parameters we've found the best way is to use [argparser](https://CRAN.R-project.org/package=argparser), also honourable mention to [optparse](https://CRAN.R-project.org/package=optparse). Checkout [Mark's blog post series on building R command line applications](http://blog.sellorm.com/2017/12/18/learn-to-write-command-line-utilities-in-r/). After you've parsed the arguments everything is essentially the same as pushing straight to the database, except that you write to csv at the end.
+Running R from the command line is relatively straight forward. To handle parameters we've found the best way is to use [argparser](https://CRAN.R-project.org/package=argparser), also honourable mention to [optparse](https://CRAN.R-project.org/package=optparse). Checkout [Mark's blog post series on building R command line applications](http://blog.sellorm.com/2017/12/18/learn-to-write-command-line-utilities-in-r/). After you've parsed the arguments everything is essentially the same as pushing straight to the database, except that you write to csv at the end. SSIS then picks up the csv file and loads it into the database. Performance is generally not as good as the other methods but in our experience it was close enough -- especially for a batch job.
 
-The SSIS solution has some great advantages in that it is controlled by the SQL developers, it has the greatest separation of technologies, and it's easy to test the R process in isolation. Downsides are it's unlikely that going via csv will be the fastest, and you need to be a little more careful about data types.
+The SSIS solution has some great advantages in that it is controlled by the SQL developers, it has the greatest separation of technologies, and it's easy to test the R process in isolation. Downsides are it's unlikely that going via csv will be the fastest, and you need to be a little more careful about data types when reading the csv into R.
 
 The Results
 ===========
 
-Over to the BI team. Show a plot.
+If everything goes well the results of your delays simulation will land in the database every night, and every morning reports can be built and dashboards updated. The results look something like this:
+
+``` sql
+SELECT TOP(5) * FROM flightdelays
+```
+
+| id    |  sim\_id|  dep\_delay|
+|:------|--------:|-----------:|
+| 27005 |        1|   -27.48316|
+| 27006 |        1|    46.50636|
+| 27007 |        1|    65.94304|
+| 27008 |        1|   -78.93091|
+| 27009 |        1|   -17.86126|
+
+Your work is not totally done. There is a one of cost of getting the dashboards setup. The simulation results are not always the easiest to get your head around so it helps if you can setup the BI team with a few queries just to get started. For example: To generate a daily average delay for the airline `UA`, they would need something like the following:
+
+``` sql
+WITH gp AS (
+SELECT sim_id
+      ,origin
+      ,day_date
+      ,avg(fd.dep_delay) as mean_delay
+  FROM dbo.flightdelays fd
+  LEFT JOIN (SELECT *, convert(date, time_hour) as day_date FROM dbo.flights) fs on fd.id = fs.id
+  WHERE fs.carrier='UA'
+  GROUP BY sim_id, origin, day_date
+)
+
+SELECT day_date, origin
+     , avg(mean_delay) as mean_delay
+     , min(mean_delay) as min_delay
+     , max(mean_delay) as max_delay
+FROM gp
+GROUP BY origin, day_date
+ORDER BY day_date, origin
+```
+
+So first you aggregate over each simulation, then you aggregated across simulations. Your BI team's SQL is better than yours (and definitely mine) so this can be a useful way to get feedback on your code and it's also a good way to explain what your model does to them (code speaks louder than words). Loading up a table like this into a BI tool (for example Power BI) you can get all the plots you're used to.
+
+THE PLOT
+
+It turns out the daily variation means you don't learn much from this plot. Maybe it's time to go and look at that manager's question about late flights afterall.
+
+Conclusion
+==========
+
+Conclusion (expand a bit)
+
+-   DS does not exist in a vacuum.
+-   Always serve your code from a package with as few exported functions as possible.
+-   We like in-database R but failover was a deal breaker.
