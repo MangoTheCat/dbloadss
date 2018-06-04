@@ -15,7 +15,7 @@ consql <- DBI::dbConnect(odbc::odbc(),
 ```
 
 
-As an R user who is building models and analysing data one of the key challenges is how do you make those results available to those who need it? After all, data science is about making better decisions, and your results need to get into the hands of the people who make those decisions.
+As an R user who is building models and analysing data one of the key challenges is how do you make those results available to those who need it? After all, [data science is about making better decisions](https://www.mango-solutions.com/blog/a-definition-of-data-science), and your results need to get into the hands of the people who make those decisions.
 
 For reporting there are many options from writing [Excel files](https://www.mango-solutions.com/blog/r-the-excel-connection) to [rmarkdown documents](https://rmarkdown.rstudio.com/) and [shiny apps](https://shiny.rstudio.com/). Many businesses will require results to go into a business intelligence (BI) tool alongside a number of other critcial business metrics. Moreover the results need to be refreshed daily. In this situation you will be working with SQL developers to integrate your work. The question is, what is the best way to deliver R code to the BI team?
 
@@ -25,7 +25,7 @@ In this blog post we will be looking at the specific case of deploying a predict
 
 ## Flight delay planning
 
-To demonstrate we'll use the familiar `flights` dataset from the [nycflights13](https://CRAN.R-project.org/package=nycflights13) package to imagine that we are airport planners and we want to test various scenarios related to flight delays. Our data contains the departure delay of all flights leaving the New York airports: JFK, LGA, and EWR in 2013. We've already loaded the dataset into SQL Server. Below is a selection of columns.
+To demonstrate we'll use the familiar `flights` dataset from the [nycflights13](https://CRAN.R-project.org/package=nycflights13) package to imagine that we are airport planners and we want to test various scenarios related to flight delays. Our data contains the departure delay of all flights leaving the New York airports: JFK, LGA, and EWR in 2013. I'm running this code on my Windows 10 laptop, where I have a local SQL Server 17 instance running, with a database called `ml`. If you want to reproduce the code you'll need to have your own SQL Server setup (you can install it locally) and push the flights table there. Here's a selection of columns:
 
 ```{sql, peakflights, connection=consql}
 SELECT TOP(5) flight, origin, dest, sched_dep_time, carrier, time_hour, dep_delay
@@ -97,7 +97,7 @@ Which you choose will depend on a number of factors. We'll take some time to loo
 
 The best way to talk to a database from R is to use the [DBI](http://r-dbi.github.io/DBI/) database interface package. The [DBI project](https://r-dbi.org.) has been around for a while but received a boost with R Consortium funding. It provides a common interface to many databases integrating specific backend packages to each separate database type. For SQL Server we're going to use the [odbc](https://CRAN.R-project.org/package=odbc) backend. It has [great documentation](https://db.rstudio.com/odbc/) and since Microsoft released [ODBC drivers for Linux](https://docs.microsoft.com/en-us/sql/connect/odbc/microsoft-odbc-driver-for-sql-server) it's a  cinch to setup from most operating systems.
 
-Let's get the flights data from SQL Server. I'm running this code on my Windows 10 laptop, where I have a local SQL Server 17 instance running, with a database called `ml`.
+Let's get the flights data from SQL Server:
 
 ```{r, odbcload, message=FALSE, warning=FALSE}
 library(DBI)
