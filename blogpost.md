@@ -132,12 +132,12 @@ head(output_data)
 ```
 
     ##      id sim_id  dep_delay
-    ## 1 27005      1 -61.926909
-    ## 2 27006      1  46.188641
-    ## 3 27007      1  43.512647
-    ## 4 27008      1  15.245413
-    ## 5 27009      1   6.763471
-    ## 6 27010      1  -8.482736
+    ## 1 27005      1   6.818887
+    ## 2 27006      1 -27.313117
+    ## 3 27007      1 -27.733148
+    ## 4 27008      1  -2.627633
+    ## 5 27009      1  14.424789
+    ## 6 27010      1  55.050609
 
 We'll do all further processing in the database so let's push it back.
 
@@ -271,15 +271,16 @@ ORDER BY day_date, origin
 
 So first you aggregate over each simulation, then you aggregated across simulations. Your BI team's SQL is better than yours (and definitely mine) so this can be a useful way to get feedback on your code and it's also a good way to explain what your model does to them (code speaks louder than words). Loading up a table like this into a BI tool (for example Power BI) you can get all the plots you're used to.
 
-THE PLOT
+![Power BI Screenshot of Results](img/mean_delay_powerbi.jpg)
 
 It turns out the daily variation means you don't learn much from this plot. Maybe it's time to go and look at that manager's question about late flights afterall.
 
 Conclusion
 ==========
 
-Conclusion (expand a bit)
+After spending a bit of time delivering R models for business reporting here are my main takeaways:
 
--   DS does not exist in a vacuum.
--   Always serve your code from a package with as few exported functions as possible.
--   We like in-database R but failover was a deal breaker.
+1.  Data Science does not exist in a vacuum. Think about how to get your results into the hands of decision makers from the beginning. Think about their tools and workflow and work back to how you can deliver.
+2.  Always serve your code from a package with as few exported functions as possible. Make it as simple as possible for a non-R (or Python) user to run the code. Document everything that goes in and out and defend your code like crazy from bad input. The rest is your domain.
+3.  Push as much processing as possible back to the database. It gives maximum flexibility for the BI team to produce all the reports that they might be asked for.
+4.  When it works I really like the in-database R method. It gives the power to the database team and performs really well. Unfortunately right now the issue with failover clusters has been a deal-breaker for me and so falling back to SSIS has worked just fine.

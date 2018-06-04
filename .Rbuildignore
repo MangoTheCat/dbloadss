@@ -1,6 +1,7 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
 ^scripts$
+^img$
 ^README\.Rmd$
 ^README-.*\.png$
 ^blogpost\.*
