@@ -117,13 +117,13 @@ So for 20 simulations we have about 3.5 million rows of output! It's just a flig
 head(output_data)
 ```
 
-    ##      id sim_id  dep_delay
-    ## 1 27005      1   4.325750
-    ## 2 27006      1  33.075209
-    ## 3 27007      1  43.030219
-    ## 4 27008      1 -37.245324
-    ## 5 27009      1  -6.964179
-    ## 6 27010      1 -73.557505
+    ##      id sim_id dep_delay
+    ## 1 27005      1 -49.25918
+    ## 2 27006      1  23.09865
+    ## 3 27007      1  28.84683
+    ## 4 27008      1 -43.68340
+    ## 5 27009      1 -44.98220
+    ## 6 27010      1  37.62463
 
 We'll do all further processing in the database so let's push it back.
 
@@ -214,6 +214,38 @@ The Pickup (R from SSIS)
 The final method is to use [SSIS](https://docs.microsoft.com/en-gb/sql/integration-services/sql-server-integration-services) to treat running the R model as an [ETL](https://en.wikipedia.org/wiki/Extract,_transform,_load) process. To keep things simple we use SSIS to output the input data as a flat file (csv), kick-off an R process to run the job, and *pickup* the results from another csv. This means that we'll be making our R code run as a command line tool and using a csv "air gap".
 
 Running R from the command line is relatively straight forward. To handle parameters we've found the best way is to use [argparser](https://CRAN.R-project.org/package=argparser), also honourable mention to [optparse](https://CRAN.R-project.org/package=optparse). Checkout [Mark's blog post series on building R command line applications](http://blog.sellorm.com/2017/12/18/learn-to-write-command-line-utilities-in-r/). After you've parsed the arguments everything is essentially the same as pushing straight to the database, except that you write to csv at the end. SSIS then picks up the csv file and loads it into the database. Performance is generally not as good as the other methods but in our experience it was close enough -- especially for a batch job.
+
+An example of what this script might look like is on GitHub. We can run this by doing (from the commandline):
+
+``` sh
+> Rscript blog/flight_delay.R -n 10 -d '2017-07-01' -i flights.csv
+Loading required package: methods
+Running delay simulations:
+   = FALSE
+  help = FALSE
+  verbose = FALSE
+  opts = NA
+  nsim = 10
+  split_date = 2013-07-01
+  input_path = flights.csv
+  output_path = simulated_delays.csv
+Reading... Parsed with column specification:
+cols(
+  .default = col_integer(),
+  carrier = col_character(),
+  tailnum = col_character(),
+  origin = col_character(),
+  dest = col_character(),
+  time_hour = col_datetime(format = "")
+)
+See spec(...) for full column specifications.
+Read  336776  rows
+Running simulations...
+Writing  1706180  rows
+Done.
+```
+
+When doing this from SSIS it can directly call Rscript and the arguments can be variables.
 
 The SSIS solution has some great advantages in that it is controlled by the SQL developers, it has the greatest separation of technologies, and it's easy to test the R process in isolation. Downsides are it's unlikely that going via csv will be the fastest, and you need to be a little more careful about data types when reading the csv into R.
 
