@@ -1,11 +1,11 @@
 Deploying R Models in SQL Server
 ================
 Doug Ashton
-23 May 2018
+8th June 2018
 
-As an R user who is building models and analysing data one of the key challenges is how do you make those results available to those who need it? After all, [data science is about making better decisions](https://www.mango-solutions.com/blog/a-definition-of-data-science), and your results need to get into the hands of the people who make those decisions.
+As an R user who is building models and analysing data one of the key challenges is how to make those results available to those who need it? After all, [data science is about making better decisions](https://www.mango-solutions.com/blog/a-definition-of-data-science), and your results need to get into the hands of the people who make those decisions.
 
-For reporting there are many options from writing [Excel files](https://www.mango-solutions.com/blog/r-the-excel-connection) to [rmarkdown documents](https://rmarkdown.rstudio.com/) and [shiny apps](https://shiny.rstudio.com/). Many businesses already have great reporting with a business intelligence (BI) tool. For them it is preferenable that you present your results alongside a number of other critcial business metrics. Moreover your results need to be refreshed daily. In this situation you will be working with SQL developers to integrate your work. The question is, what is the best way to deliver R code to the BI team?
+For reporting there are many options from writing [Excel files](https://www.mango-solutions.com/blog/r-the-excel-connection) to [rmarkdown documents](https://rmarkdown.rstudio.com/) and [shiny apps](https://shiny.rstudio.com/). Many businesses already have great reporting with a business intelligence (BI) tool. For them it is preferable that you present your results alongside a number of other critical business metrics. Moreover your results need to be refreshed daily. In this situation you might be working with SQL developers to integrate your work. The question is, what is the best way to deliver R code to the BI team?
 
 In this blog post we will be looking at the specific case of deploying a predictive model, written in R, to a Microsoft SQL Server database for consumption by a BI tool. We'll look at some of the different options to integrate R, from in-database R services, to pushing with [ODBC](https://en.wikipedia.org/wiki/Open_Database_Connectivity) or picking up flat files with [SSIS](https://docs.microsoft.com/en-gb/sql/integration-services/sql-server-integration-services).
 
@@ -53,15 +53,10 @@ To simulate delays on future flights we can call the `simulate` function. Here w
 sim_delays <- simulate(model, nsim = 10, newdata = data_test)
 ```
 
-The reason we're using `simulate` rather than `predict` is that we don't just want the most likely value for each delay, we want to sample from likely scenarios. That way we can report any aspect of the result that seems relevant.
+The reason we're using `simulate` rather than `predict` is that we don't just want the most likely value for each delay, we want to sample from likely scenarios. That way we can report any aspect of the result that seems relevant. A data scientist will ask: "how can I predict `dep_delay` as accurately as possible?". An airport manager will want to know "how often will the last flight of the day leave after midnight?", or another question that you haven't thought of. This type of output lets the BI team address these sorts of question.
 
-Implementation
-==============
-
-The data scientist has done their exploratory work, made some nice notebooks, and are really happy with their p-values. How do we now deploy their model?
-
-Use Packages
-------------
+Package it up
+-------------
 
 At Mango we believe that the basic unit of work is a package. A well written package will be self-documenting, have a familiar structure, and unit tests. All behind-the-scenes code can be written into unexported functions, and user facing code lives in a small number (often one) of exported functions. This single entry point should be designed for someone who is not an experienced R user to run the code, and if anything goes wrong, be as informative as possible. R is particularly friendly for building packages, with the excellent [devtools](https://CRAN.R-project.org/package=devtools) automating most of it, and the wonderfully short [R packages](http://r-pkgs.had.co.nz/) book by Hadley guiding you through it all.
 
@@ -72,15 +67,6 @@ output_data <- simulate_departure_delays(input_data, nsim = 20)
 ```
 
 where the `input_data` is prepared from the database and `output_data` will be pushed/pulled back to the database.
-
-Output Everything
------------------
-
-A data scientist will ask: "how can I predict `dep_delay` as accurately as possible?". An airport manager will want to know "how often will the last flight of the day leave after midnight?", or another question that you haven't thought of.
-
-Of course we can use R to answer each of these questions one at a time. However, this is frustrating for everyone because the data scientist wants to be modelling, and the business user has to wait for each new answer.
-
-Fortunately, this is exactly the kind of thing that SQL and BI tools are built to do. So instead of processing the results in R we will output every simulation run into SQL Server and do the post processing in the database or BI tool.
 
 Connecting to the Database
 ==========================
@@ -99,7 +85,7 @@ Which you choose will depend on a number of factors. We'll take some time to loo
 The Push (SQL from R)
 ---------------------
 
-The best way to talk to a database from R is to use the [DBI](http://r-dbi.github.io/DBI/) database interface package. The [DBI project](https://r-dbi.org.) has been around for a while but received a boost with R Consortium funding. It provides a common interface to many databases integrating specific backend packages to each separate database type. For SQL Server we're going to use the [odbc](https://CRAN.R-project.org/package=odbc) backend. It has [great documentation](https://db.rstudio.com/odbc/) and since Microsoft released [ODBC drivers for Linux](https://docs.microsoft.com/en-us/sql/connect/odbc/microsoft-odbc-driver-for-sql-server) it's a cinch to setup from most operating systems.
+The best way to talk to a database from R is to use the [DBI](http://r-dbi.github.io/DBI/) database interface package. The [DBI project](https://r-dbi.org.) has been around for a while but received a boost with [R Consortium funding](https://www.r-consortium.org/projects/awarded-projects). It provides a common interface to many databases integrating specific backend packages to each separate database type. For SQL Server we're going to use the [odbc](https://CRAN.R-project.org/package=odbc) backend. It has [great documentation](https://db.rstudio.com/odbc/) and since Microsoft released [ODBC drivers for Linux](https://docs.microsoft.com/en-us/sql/connect/odbc/microsoft-odbc-driver-for-sql-server) it's a cinch to setup from most operating systems.
 
 Let's get the flights data from SQL Server:
 
@@ -132,12 +118,12 @@ head(output_data)
 ```
 
     ##      id sim_id  dep_delay
-    ## 1 27005      1   6.818887
-    ## 2 27006      1 -27.313117
-    ## 3 27007      1 -27.733148
-    ## 4 27008      1  -2.627633
-    ## 5 27009      1  14.424789
-    ## 6 27010      1  55.050609
+    ## 1 27005      1   4.325750
+    ## 2 27006      1  33.075209
+    ## 3 27007      1  43.030219
+    ## 4 27008      1 -37.245324
+    ## 5 27009      1  -6.964179
+    ## 6 27010      1 -73.557505
 
 We'll do all further processing in the database so let's push it back.
 
@@ -171,6 +157,8 @@ A word of warning before we continue. There's a line in the [Microsoft docs](htt
 > Do not install R Services on a failover cluster. The security mechanism used for isolating R processes is not compatible with a Windows Server failover cluster environment.
 
 that somewhat limits the ultimate use of this technique in production settings as a failover cluster is a very common configuration. Assuming this might get fixed, or perhaps it's not an issue for you, let's see how it works.
+
+I'm running SQL Server 2017 with Machine Learning Services. This installs its own version of R that you can access. To do so you have to [enable "the execution of scripts with certain remote language extensions"](https://docs.microsoft.com/en-us/sql/database-engine/configure-windows/external-scripts-enabled-server-configuration-option?view=sql-server-2017). Then you need to install the dbloadss package somewhere that this version of R can see. This can require admin priviledges, or alternatively you can set the `.libPaths()` somewhere in the stored proc.
 
 The following stored procedure is what we'll add for our flight delays model:
 
@@ -216,14 +204,14 @@ INSERT INTO [dbo].[flightdelays]
 EXEC [dbo].[r_simulate_departure_delays] @nsim = 20
 ```
 
-The perforance of this method seems to be good. For write speeds in our tests it was faster even than pushing with odbc, although it's harder to benchmark in the flights example because it includes running the simulation.
+The performance of this method seems to be good. For write speeds in our tests it was faster even than pushing with odbc, although it's harder to benchmark in the flights example because it includes running the simulation.
 
 Overall, were it not for the issue with failover clusters I would be recommending this as the best way to integrate R with SQL Server. As it stands you'll have to evaluate on your setup.
 
 The Pickup (R from SSIS)
 ------------------------
 
-The final method is to use [SSIS](https://docs.microsoft.com/en-gb/sql/integration-services/sql-server-integration-services) to treat running the R model as an [ETL](https://en.wikipedia.org/wiki/Extract,_transform,_load) process. To keep things simple we use SSIS to output the input data as a flat file (csv), kick-off an R process to run the job, and *pickup* the results from another csv. This means that we'll be making our R code run as a commandline tool and using a csv "air gap".
+The final method is to use [SSIS](https://docs.microsoft.com/en-gb/sql/integration-services/sql-server-integration-services) to treat running the R model as an [ETL](https://en.wikipedia.org/wiki/Extract,_transform,_load) process. To keep things simple we use SSIS to output the input data as a flat file (csv), kick-off an R process to run the job, and *pickup* the results from another csv. This means that we'll be making our R code run as a command line tool and using a csv "air gap".
 
 Running R from the command line is relatively straight forward. To handle parameters we've found the best way is to use [argparser](https://CRAN.R-project.org/package=argparser), also honourable mention to [optparse](https://CRAN.R-project.org/package=optparse). Checkout [Mark's blog post series on building R command line applications](http://blog.sellorm.com/2017/12/18/learn-to-write-command-line-utilities-in-r/). After you've parsed the arguments everything is essentially the same as pushing straight to the database, except that you write to csv at the end. SSIS then picks up the csv file and loads it into the database. Performance is generally not as good as the other methods but in our experience it was close enough -- especially for a batch job.
 
@@ -273,7 +261,7 @@ So first you aggregate over each simulation, then you aggregated across simulati
 
 ![Power BI Screenshot of Results](img/mean_delay_powerbi.jpg)
 
-It turns out the daily variation means you don't learn much from this plot. Maybe it's time to go and look at that manager's question about late flights afterall.
+It turns out the daily variation means you don't learn much from this plot. Maybe it's time to go and look at that manager's question about late flights after all.
 
 Conclusion
 ==========
